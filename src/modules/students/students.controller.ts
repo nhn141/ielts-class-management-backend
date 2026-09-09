@@ -37,12 +37,6 @@ export class StudentsController {
     return this.studentsService.findAll(query, currentUser);
   }
 
-  @Get(':id')
-  @Roles(Role.SUPER_ADMIN, Role.TEACHER, Role.TEACHING_ASSISTANT)
-  findOne(@Param('id') id: string, @CurrentUser() currentUser: User) {
-    return this.studentsService.findOne(id, currentUser);
-  }
-
   @Get(':id/evaluations')
   @Roles(Role.SUPER_ADMIN, Role.TEACHER, Role.TEACHING_ASSISTANT)
   getStudentEvaluations(
@@ -50,6 +44,12 @@ export class StudentsController {
     @CurrentUser() currentUser: User,
   ) {
     return this.studentsService.getStudentEvaluations(id, currentUser);
+  }
+
+  @Get(':id')
+  @Roles(Role.SUPER_ADMIN, Role.TEACHER, Role.TEACHING_ASSISTANT)
+  findOne(@Param('id') id: string, @CurrentUser() currentUser: User) {
+    return this.studentsService.findOne(id, currentUser);
   }
 
   @Patch(':id')
