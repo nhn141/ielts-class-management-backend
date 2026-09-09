@@ -43,6 +43,15 @@ export class StudentsController {
     return this.studentsService.findOne(id, currentUser);
   }
 
+  @Get(':id/evaluations')
+  @Roles(Role.SUPER_ADMIN, Role.TEACHER, Role.TEACHING_ASSISTANT)
+  getStudentEvaluations(
+    @Param('id') id: string,
+    @CurrentUser() currentUser: User,
+  ) {
+    return this.studentsService.getStudentEvaluations(id, currentUser);
+  }
+
   @Patch(':id')
   @Roles(Role.SUPER_ADMIN, Role.TEACHER)
   update(
