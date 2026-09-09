@@ -1,0 +1,6 @@
+export enum ClassLevel {
+  BASIC = 'BASIC',
+  ADVANCED_LS = 'ADVANCED_LS',
+  ADVANCED_RW = 'ADVANCED_RW',
+  TEST_PRACTICE = 'TEST_PRACTICE',
+}

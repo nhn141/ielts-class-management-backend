@@ -1,0 +1,26 @@
+name: Keep Backend & Database Awake
+
+on:
+  schedule:
+    # Chạy định kỳ mỗi 14 phút (Render ngủ sau 15 phút không có request)
+    - cron: '*/14 * * * *'
+  workflow_dispatch: # Cho phép bấm nút chạy thủ công từ tab Actions trên GitHub
+
+jobs:
+  ping-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Backend Health Endpoint
+        run: |
+          BACKEND_URL="${{ secrets.BACKEND_API_URL }}"
+          if [ -z "$BACKEND_URL" ]; then
+            echo "BACKEND_API_URL secret is not set yet. Please configure it in Repo Settings -> Secrets."
+            exit 0
+          fi
+          
+          # Đảm bảo URL kết thúc đúng với /health
+          ENDPOINT="${BACKEND_URL%/}/health"
+          echo "Pinging: $ENDPOINT"
+          
+          HTTP_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "$ENDPOINT" || echo "failed")
+          echo "Response code: $HTTP_RESPONSE"
