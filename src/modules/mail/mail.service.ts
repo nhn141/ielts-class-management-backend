@@ -59,7 +59,6 @@ export class MailService {
 
     if (this.resendApiKey) {
       this.logger.log('Resend HTTPS API (Port 443) configured for sending emails.');
-      return;
     }
 
     const host = this.configService.get<string>('SMTP_HOST');
@@ -82,11 +81,30 @@ export class MailService {
         },
       });
       this.logger.log(`SMTP Transporter configured for host: ${host}:${port} (${user})`);
-    } else {
+    } else if (!this.resendApiKey) {
       this.logger.warn(
-        'Neither RESEND_API_KEY nor SMTP configurations provided in .env. Emails will be logged to console.',
+        'Neither RESEND_API_KEY nor SMTP configurations provided in .env. Emails will be simulated.',
       );
     }
+  }
+
+  private sanitizeMailFrom(rawFrom?: string): string {
+    let from = (rawFrom || '').trim();
+    if (!from) {
+      return 'Thầy Thành IELTS <onboarding@resend.dev>';
+    }
+    // Remove outer quotes if wrapped like "Name <email>" or 'Name <email>'
+    while (
+      (from.startsWith('"') && from.endsWith('"')) ||
+      (from.startsWith("'") && from.endsWith("'"))
+    ) {
+      from = from.slice(1, -1).trim();
+    }
+    // If it's just an email e.g. "onboarding@resend.dev", wrap with default name
+    if (from.includes('@') && !from.includes('<')) {
+      return `Thầy Thành IELTS <${from}>`;
+    }
+    return from;
   }
 
   /**
@@ -333,10 +351,11 @@ export class MailService {
       return { success: false, error: 'Không tìm thấy địa chỉ email của học viên hoặc phụ huynh' };
     }
 
-    const mailFrom = this.configService.get<string>(
+    const rawMailFrom = this.configService.get<string>(
       'MAIL_FROM',
       'Thầy Thành IELTS <onboarding@resend.dev>',
     );
+    const mailFrom = this.sanitizeMailFrom(rawMailFrom);
     const subject = `[Thầy Thành IELTS] Báo Cáo Học Tập Tuần (${data.weekRange.start} - ${data.weekRange.end}) - Học viên: ${data.student.fullName}`;
     const html = this.buildWeeklyReportHtml(data);
 
@@ -366,6 +385,24 @@ export class MailService {
         return { success: true, messageId: resData.id };
       } catch (error: any) {
         this.logger.error(`Resend API send failed to ${recipients.join(', ')}: ${error.message}`);
+        
+        // If SMTP is also configured, attempt fallback to SMTP
+        if (this.transporter) {
+          this.logger.warn(`Attempting fallback to SMTP for recipients: ${recipients.join(', ')}...`);
+          try {
+            const info = await this.transporter.sendMail({
+              from: mailFrom,
+              to: recipients,
+              subject,
+              html,
+            });
+            this.logger.log(`Weekly report email sent via SMTP fallback to ${recipients.join(', ')} (Message ID: ${info.messageId})`);
+            return { success: true, messageId: info.messageId };
+          } catch (smtpErr: any) {
+            this.logger.error(`SMTP fallback also failed: ${smtpErr.message}`);
+          }
+        }
+
         return { success: false, error: error.message };
       }
     }
