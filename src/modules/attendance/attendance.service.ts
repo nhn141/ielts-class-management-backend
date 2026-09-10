@@ -521,6 +521,28 @@ export class AttendanceService {
       };
     });
 
+    let sessionNumber: number | null = null;
+    let totalSessions = 0;
+    let isCustom = false;
+
+    try {
+      const curriculum = await this.getCurriculum(session.classId, currentUser);
+      const allSessions = curriculum.sessions || [];
+      totalSessions = allSessions.length;
+      const matched = allSessions.find((s) => {
+        if (s.id && s.id === session.id) return true;
+        const sameDate = s.sessionDate === session.sessionDate;
+        const sameTime = session.startTime ? s.startTime === session.startTime : true;
+        return sameDate && sameTime;
+      });
+      if (matched) {
+        sessionNumber = matched.sessionNumber || null;
+        isCustom = matched.isCustom || false;
+      }
+    } catch {
+      // Fallback gracefully
+    }
+
     return {
       session: {
         id: session.id,
@@ -535,6 +557,9 @@ export class AttendanceService {
         lessonNotes: session.lessonNotes,
         materialsUrl: session.materialsUrl,
         teacherName: session.teacher?.fullName || session.class?.teacher?.fullName,
+        sessionNumber,
+        totalSessions,
+        isCustom,
       },
       students: studentsWithAttendance,
     };
