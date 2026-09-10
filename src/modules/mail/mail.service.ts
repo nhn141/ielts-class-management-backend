@@ -49,13 +49,19 @@ export class MailService {
   private readonly logger = new Logger(MailService.name);
   private transporter: Transporter | null = null;
   private resendApiKey: string | null = null;
+  private brevoApiKey: string | null = null;
 
   constructor(private configService: ConfigService) {
     this.initMailClient();
   }
 
   private initMailClient() {
+    this.brevoApiKey = this.configService.get<string>('BREVO_API_KEY') || null;
     this.resendApiKey = this.configService.get<string>('RESEND_API_KEY') || null;
+
+    if (this.brevoApiKey) {
+      this.logger.log('Brevo HTTPS API (Port 443) configured for sending emails.');
+    }
 
     if (this.resendApiKey) {
       this.logger.log('Resend HTTPS API (Port 443) configured for sending emails.');
@@ -81,9 +87,9 @@ export class MailService {
         },
       });
       this.logger.log(`SMTP Transporter configured for host: ${host}:${port} (${user})`);
-    } else if (!this.resendApiKey) {
+    } else if (!this.resendApiKey && !this.brevoApiKey) {
       this.logger.warn(
-        'Neither RESEND_API_KEY nor SMTP configurations provided in .env. Emails will be simulated.',
+        'Neither BREVO_API_KEY, RESEND_API_KEY nor SMTP configurations provided in .env. Emails will be simulated.',
       );
     }
   }
@@ -359,7 +365,48 @@ export class MailService {
     const subject = `[Thầy Thành IELTS] Báo Cáo Học Tập Tuần (${data.weekRange.start} - ${data.weekRange.end}) - Học viên: ${data.student.fullName}`;
     const html = this.buildWeeklyReportHtml(data);
 
-    // 1. If RESEND_API_KEY is configured, send via Resend HTTPS API (Port 443 - Never blocked by ISPs)
+    // 1. If BREVO_API_KEY is configured, send via Brevo HTTPS REST API (Port 443 - Never blocked, no domain needed)
+    if (this.brevoApiKey) {
+      try {
+        let senderName = 'Thầy Thành IELTS';
+        let senderEmail = 'nguyenhuunghi141@gmail.com';
+        const match = mailFrom.match(/^(.*?)\s*<(.+?)>$/);
+        if (match) {
+          senderName = match[1].trim();
+          senderEmail = match[2].trim();
+        } else if (mailFrom.includes('@')) {
+          senderEmail = mailFrom.trim();
+        }
+
+        const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+          method: 'POST',
+          headers: {
+            'api-key': this.brevoApiKey,
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify({
+            sender: { name: senderName, email: senderEmail },
+            to: recipients.map((email) => ({ email })),
+            subject,
+            htmlContent: html,
+          }),
+        });
+
+        const resData = await response.json();
+        if (!response.ok) {
+          throw new Error(resData.message || JSON.stringify(resData));
+        }
+
+        this.logger.log(`Weekly report email sent via Brevo API to ${recipients.join(', ')} (Message ID: ${resData.messageId})`);
+        return { success: true, messageId: resData.messageId };
+      } catch (error: any) {
+        this.logger.error(`Brevo API send failed to ${recipients.join(', ')}: ${error.message}`);
+        return { success: false, error: error.message };
+      }
+    }
+
+    // 2. If RESEND_API_KEY is configured, send via Resend HTTPS API (Port 443 - Never blocked by ISPs)
     if (this.resendApiKey) {
       try {
         const response = await fetch('https://api.resend.com/emails', {
